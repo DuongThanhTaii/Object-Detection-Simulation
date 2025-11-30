@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ultimate Object Detection Simulator (NMS & Metrics)</title>
+    <title>OD Simulator v4: Image Upload & NMS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -25,7 +25,6 @@
         font-family: "Georgia", serif;
         line-height: 1.6;
       }
-      /* Custom scrollbar for tables */
       .table-scroll::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -39,7 +38,7 @@
   <body class="bg-gray-100 h-screen flex flex-col overflow-hidden">
     <!-- Header -->
     <header
-      class="bg-slate-900 text-white p-3 shadow-md flex justify-between items-center z-20"
+      class="bg-gray-900 text-white p-3 shadow-md flex justify-between items-center z-20 border-b border-gray-700"
     >
       <div class="flex items-center gap-3">
         <div class="w-10 h-10 rounded flex items-center justify-center">
@@ -58,34 +57,74 @@
       <div class="flex gap-3">
         <button
           onclick="downloadReport()"
-          class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-sm font-bold transition flex items-center gap-2"
+          class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-sm font-bold transition flex items-center gap-2 shadow-sm border border-indigo-400"
         >
-          <i class="fas fa-camera"></i>
-          Chụp Báo Cáo
+          <i class="fas fa-file-export"></i>
+          Xuất Báo Cáo
         </button>
       </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-      <!-- Sidebar Controls -->
+      <!-- Sidebar -->
       <aside
-        class="w-[420px] bg-white shadow-xl overflow-y-auto flex flex-col border-r z-10"
+        class="w-[420px] bg-white shadow-2xl overflow-y-auto flex flex-col border-r z-10 relative"
       >
         <div class="p-4 space-y-4 pb-20">
-          <!-- 1. Drawing Tools -->
+          <!-- 0. Image Upload -->
           <div
-            class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden group"
+            class="bg-blue-50 p-4 rounded-lg border border-blue-200 shadow-sm relative overflow-hidden group"
           >
             <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
             <h2
+              class="font-bold text-blue-900 text-sm mb-3 uppercase tracking-wider flex items-center gap-2"
+            >
+              <i class="fas fa-image"></i>
+              1. Ảnh Nền (Input Image)
+            </h2>
+
+            <div class="flex gap-2">
+              <input
+                type="file"
+                id="img-upload"
+                accept="image/*"
+                class="hidden"
+                onchange="handleImageUpload(this)"
+              />
+              <button
+                onclick="document.getElementById('img-upload').click()"
+                class="flex-1 py-2 bg-white border border-blue-300 text-blue-700 rounded hover:bg-blue-100 font-semibold text-xs transition shadow-sm flex items-center justify-center gap-2"
+              >
+                <i class="fas fa-upload"></i>
+                Tải ảnh lên
+              </button>
+              <button
+                onclick="removeImage()"
+                class="px-3 py-2 bg-white border border-red-300 text-red-600 rounded hover:bg-red-50 font-semibold text-xs transition shadow-sm"
+                title="Xóa ảnh nền"
+              >
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <p class="text-[10px] text-blue-400 mt-2 italic">
+              *Hỗ trợ JPG, PNG. Ảnh sẽ được tự động căn giữa canvas.
+            </p>
+          </div>
+
+          <!-- 1. Drawing Tools -->
+          <div
+            class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden"
+          >
+            <div class="absolute top-0 left-0 w-1 h-full bg-gray-400"></div>
+            <h2
               class="font-bold text-gray-800 text-sm mb-3 uppercase tracking-wider flex justify-between"
             >
-              1. Công cụ vẽ
+              2. Công cụ gán nhãn
               <span
-                class="text-gray-400 text-xs normal-case cursor-help"
-                title="Chuột trái vẽ, Chuột phải xóa"
+                class="text-gray-400 text-[10px] normal-case cursor-help flex items-center gap-1"
               >
-                Hdsd: Chuột phải để xóa
+                <i class="fas fa-mouse-pointer"></i>
+                Chuột phải xóa box
               </span>
             </h2>
 
@@ -129,16 +168,25 @@
               />
             </div>
 
+            <!-- New Random Simulation Button -->
             <button
-              onclick="clearCanvas()"
+              onclick="randomizeSimulation()"
+              class="w-full py-2 mb-2 bg-yellow-100 text-yellow-700 border border-yellow-300 rounded hover:bg-yellow-200 font-bold text-xs transition flex items-center justify-center gap-2"
+            >
+              <i class="fas fa-random"></i>
+              Mô phỏng Ngẫu nhiên (Random Demo)
+            </button>
+
+            <button
+              onclick="clearBoxesOnly()"
               class="w-full py-1 text-xs text-red-500 border border-red-200 rounded hover:bg-red-50 font-semibold transition"
             >
-              <i class="fas fa-trash-alt mr-1"></i>
-              Xóa toàn bộ dữ liệu
+              <i class="fas fa-eraser mr-1"></i>
+              Xóa tất cả các hộp (Giữ ảnh)
             </button>
           </div>
 
-          <!-- 2. Parameters (NMS & IoU) -->
+          <!-- 2. Algorithm Params -->
           <div
             class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm relative overflow-hidden"
           >
@@ -146,15 +194,12 @@
             <h2
               class="font-bold text-gray-800 text-sm mb-3 uppercase tracking-wider"
             >
-              2. Tham số thuật toán
+              3. Tham số thuật toán
             </h2>
 
-            <!-- IoU Threshold -->
             <div class="mb-4">
               <div class="flex justify-between text-xs mb-1">
-                <span class="font-semibold text-gray-700">
-                  IoU Threshold (Matching):
-                </span>
+                <span class="font-semibold text-gray-700">IoU Threshold:</span>
                 <span id="iou-val" class="font-bold text-purple-600">0.50</span>
               </div>
               <input
@@ -167,12 +212,8 @@
                 class="w-full h-1 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                 oninput="updateParams()"
               />
-              <p class="text-[10px] text-gray-400 mt-1">
-                Ngưỡng để xác định box dự đoán là đúng (Positive).
-              </p>
             </div>
 
-            <!-- NMS Threshold -->
             <div class="mb-4 border-t pt-3 border-dashed border-gray-200">
               <div class="flex justify-between text-xs mb-1">
                 <span class="font-semibold text-gray-700">NMS Threshold:</span>
@@ -197,21 +238,19 @@
                 />
               </div>
               <p class="text-[10px] text-gray-400 mt-1">
-                Bật checkbox để kích hoạt Non-Maximum Suppression (Loại bỏ trùng
-                lặp).
+                Bật checkbox để kích hoạt NMS (Loại bỏ trùng lặp).
               </p>
             </div>
 
-            <!-- View Options -->
             <div class="flex flex-wrap gap-2 text-xs">
               <label
-                class="flex items-center gap-1 cursor-pointer bg-gray-50 px-2 py-1 rounded border"
+                class="flex items-center gap-1 cursor-pointer bg-gray-50 px-2 py-1 rounded border hover:bg-gray-100"
               >
                 <input type="checkbox" id="show-grid" onchange="drawAll()" />
                 <span>TN Grid</span>
               </label>
               <label
-                class="flex items-center gap-1 cursor-pointer bg-gray-50 px-2 py-1 rounded border"
+                class="flex items-center gap-1 cursor-pointer bg-gray-50 px-2 py-1 rounded border hover:bg-gray-100"
               >
                 <input
                   type="checkbox"
@@ -226,65 +265,53 @@
 
           <button
             onclick="calculateMetrics()"
-            class="w-full py-3 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 font-bold text-sm uppercase tracking-wide transition transform hover:scale-[1.02]"
+            class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg shadow-lg hover:shadow-xl font-bold text-sm uppercase tracking-wide transition transform hover:scale-[1.02]"
           >
-            <i class="fas fa-play-circle mr-2"></i>
+            <i class="fas fa-play mr-2"></i>
             Chạy Phân Tích
           </button>
 
           <!-- 3. Results Panel -->
-          <div id="results-panel" class="hidden space-y-4 animate-fade-in-up">
+          <div
+            id="results-panel"
+            class="hidden space-y-4 animate-fade-in-up pt-2"
+          >
             <!-- Confusion Matrix -->
-            <div
-              class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
-            >
-              <h3 class="text-xs font-bold text-gray-500 uppercase mb-2">
-                Confusion Matrix
-              </h3>
-              <div class="grid grid-cols-4 gap-1 text-center">
-                <div class="bg-green-50 p-2 rounded border border-green-200">
-                  <div class="text-lg font-bold text-green-700" id="tp-count">
-                    0
-                  </div>
-                  <div class="text-[10px] font-bold text-green-800">TP</div>
+            <div class="grid grid-cols-4 gap-1 text-center">
+              <div class="bg-green-50 p-2 rounded border border-green-200">
+                <div class="text-lg font-bold text-green-700" id="tp-count">
+                  0
                 </div>
-                <div class="bg-red-50 p-2 rounded border border-red-200">
-                  <div class="text-lg font-bold text-red-700" id="fp-count">
-                    0
-                  </div>
-                  <div class="text-[10px] font-bold text-red-800">FP</div>
+                <div class="text-[10px] font-bold text-green-800">TP</div>
+              </div>
+              <div class="bg-red-50 p-2 rounded border border-red-200">
+                <div class="text-lg font-bold text-red-700" id="fp-count">
+                  0
                 </div>
-                <div class="bg-orange-50 p-2 rounded border border-orange-200">
-                  <div class="text-lg font-bold text-orange-700" id="fn-count">
-                    0
-                  </div>
-                  <div class="text-[10px] font-bold text-orange-800">FN</div>
+                <div class="text-[10px] font-bold text-red-800">FP</div>
+              </div>
+              <div class="bg-orange-50 p-2 rounded border border-orange-200">
+                <div class="text-lg font-bold text-orange-700" id="fn-count">
+                  0
                 </div>
-                <div
-                  class="bg-gray-100 p-2 rounded border border-gray-200 opacity-75"
-                >
-                  <div class="text-lg font-bold text-gray-600" id="tn-count">
-                    -
-                  </div>
-                  <div class="text-[10px] font-bold text-gray-600">TN</div>
+                <div class="text-[10px] font-bold text-orange-800">FN</div>
+              </div>
+              <div class="bg-gray-100 p-2 rounded border border-gray-200">
+                <div class="text-lg font-bold text-gray-600" id="tn-count">
+                  -
                 </div>
+                <div class="text-[10px] font-bold text-gray-600">TN</div>
               </div>
             </div>
 
-            <!-- Metrics Report -->
+            <!-- Metrics Table -->
             <div
-              class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden"
+              class="bg-white rounded border border-gray-200 shadow-sm overflow-hidden"
             >
               <table class="w-full text-xs text-left">
-                <thead class="bg-gray-50 text-gray-500 font-semibold border-b">
-                  <tr>
-                    <th class="px-3 py-2">Metric</th>
-                    <th class="px-3 py-2 text-right">Giá trị</th>
-                  </tr>
-                </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700">
                   <tr>
-                    <td class="px-3 py-2">Precision</td>
+                    <td class="px-3 py-2 font-medium">Precision</td>
                     <td
                       class="px-3 py-2 text-right font-mono font-bold"
                       id="precision-val"
@@ -293,7 +320,7 @@
                     </td>
                   </tr>
                   <tr>
-                    <td class="px-3 py-2">Recall</td>
+                    <td class="px-3 py-2 font-medium">Recall</td>
                     <td
                       class="px-3 py-2 text-right font-mono font-bold"
                       id="recall-val"
@@ -302,7 +329,7 @@
                     </td>
                   </tr>
                   <tr>
-                    <td class="px-3 py-2">F1-Score</td>
+                    <td class="px-3 py-2 font-medium">F1-Score</td>
                     <td
                       class="px-3 py-2 text-right font-mono font-bold"
                       id="f1-val"
@@ -312,7 +339,7 @@
                   </tr>
                   <tr class="bg-indigo-50">
                     <td class="px-3 py-2 font-bold text-indigo-700">
-                      Average Precision (AP)
+                      AP (mAP)
                     </td>
                     <td
                       class="px-3 py-2 text-right font-mono font-bold text-indigo-700 text-sm"
@@ -325,12 +352,10 @@
               </table>
             </div>
 
-            <!-- Chart -->
             <div class="bg-white p-2 rounded border shadow-sm">
               <canvas id="prChart" height="180"></canvas>
             </div>
 
-            <!-- Scientific Conclusion -->
             <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
               <p
                 id="scientific-conclusion"
@@ -338,26 +363,23 @@
               ></p>
             </div>
 
-            <!-- Detailed Log Table -->
+            <!-- Logs -->
             <div class="bg-white rounded border border-gray-200 shadow-sm">
               <div
-                class="bg-gray-100 px-3 py-2 border-b text-xs font-bold text-gray-600 uppercase"
+                class="bg-gray-50 px-3 py-1 border-b text-[10px] font-bold text-gray-500 uppercase"
               >
-                Chi tiết dự đoán (Log)
+                Detection Logs
               </div>
-              <div class="max-h-40 overflow-y-auto table-scroll">
+              <div class="max-h-32 overflow-y-auto table-scroll">
                 <table class="w-full text-[10px] text-left">
                   <thead class="bg-gray-50 sticky top-0">
                     <tr>
-                      <th class="px-2 py-1">ID</th>
-                      <th class="px-2 py-1">Conf</th>
-                      <th class="px-2 py-1">IoU (Max)</th>
+                      <th class="px-2 py-1">Score</th>
+                      <th class="px-2 py-1">IoU</th>
                       <th class="px-2 py-1">Status</th>
                     </tr>
                   </thead>
-                  <tbody id="log-table-body" class="divide-y">
-                    <!-- Rows injected via JS -->
-                  </tbody>
+                  <tbody id="log-table-body" class="divide-y"></tbody>
                 </table>
               </div>
             </div>
@@ -365,14 +387,14 @@
         </div>
       </aside>
 
-      <!-- Main Canvas Area -->
+      <!-- Main Canvas -->
       <main
         class="flex-1 bg-slate-200 relative flex flex-col items-center justify-center p-4 overflow-hidden"
         id="canvas-container"
       >
         <!-- Legend -->
         <div
-          class="bg-white/95 backdrop-blur shadow-lg px-4 py-2 rounded-full mb-4 flex gap-4 text-xs font-bold z-10 border border-gray-200"
+          class="bg-white/90 backdrop-blur shadow-md px-4 py-2 rounded-full mb-4 flex gap-4 text-xs font-bold z-10 border border-gray-200"
         >
           <div class="flex items-center gap-1">
             <div class="w-3 h-3 bg-green-500 rounded-sm"></div>
@@ -390,18 +412,12 @@
           </div>
           <div class="flex items-center gap-1 opacity-50">
             <div class="w-3 h-3 bg-gray-400 rounded-sm"></div>
-            Suppressed (NMS)
-          </div>
-          <div class="flex items-center gap-1 text-purple-600">
-            <div
-              class="w-3 h-3 bg-purple-500/30 border border-purple-500 rounded-sm"
-            ></div>
-            IoU Area
+            NMS Suppressed
           </div>
         </div>
 
         <div
-          class="relative shadow-2xl border-4 border-slate-700 bg-white cursor-crosshair group"
+          class="relative shadow-2xl border-4 border-gray-800 bg-white cursor-crosshair group overflow-hidden"
           style="width: 650px; height: 650px"
         >
           <canvas
@@ -413,33 +429,41 @@
           <!-- Tooltip -->
           <div
             id="hover-tooltip"
-            class="absolute hidden bg-black/80 text-white text-xs p-2 rounded pointer-events-none z-50 whitespace-pre"
+            class="absolute hidden bg-black/80 text-white text-xs p-2 rounded pointer-events-none z-50 whitespace-pre shadow-xl border border-gray-600"
           ></div>
-
           <div
-            class="absolute bottom-2 right-2 text-xs text-gray-300 select-none font-mono"
+            class="absolute bottom-2 right-2 text-xs text-white drop-shadow-md select-none font-mono z-20"
           >
             650x650 px
           </div>
-        </div>
 
-        <div class="mt-4 text-xs text-gray-500 italic">
-          *Mẹo: Nhấn chuột phải vào box để xóa. Kéo thả để vẽ.
+          <!-- Helper text if empty -->
+          <div
+            id="empty-state-text"
+            class="absolute inset-0 flex items-center justify-center text-gray-300 pointer-events-none z-0"
+          >
+            <div class="text-center">
+              <i class="fas fa-image text-4xl mb-2 opacity-20"></i>
+              <p class="text-sm opacity-50">Tải ảnh hoặc vẽ trực tiếp</p>
+            </div>
+          </div>
         </div>
       </main>
     </div>
 
     <script>
-      // --- Configuration ---
+      // --- Core Globals ---
       const canvas = document.getElementById("mainCanvas");
       const ctx = canvas.getContext("2d");
       const tooltip = document.getElementById("hover-tooltip");
       const CANVAS_SIZE = 650;
       const GRID_SIZE = 50;
 
-      // --- State ---
-      let groundTruths = []; // {x, y, w, h, id, status}
-      let predictions = []; // {x, y, w, h, score, id, status, iou, bestGtId}
+      let bgImage = null; // Store the uploaded image object
+      let bgImageProps = { x: 0, y: 0, w: 0, h: 0 }; // Store position/size of drawn image
+
+      let groundTruths = [];
+      let predictions = [];
       let currentMode = "gt";
       let isDrawing = false;
       let startX, startY;
@@ -447,7 +471,7 @@
       let prChartInstance = null;
       let isAnalyzed = false;
 
-      // --- UI Refs ---
+      // --- DOM Elements ---
       const btnGt = document.getElementById("btn-gt");
       const btnPred = document.getElementById("btn-pred");
       const confSlider = document.getElementById("conf-slider");
@@ -460,20 +484,59 @@
       const showGridCheck = document.getElementById("show-grid");
       const showInterCheck = document.getElementById("show-intersection");
 
-      // --- Event Listeners ---
-      const updateSliderVal = (slider, display) => {
+      // --- Setup Listeners ---
+      const updateSlider = (slider, display) => {
         slider.addEventListener("input", (e) => {
           display.textContent = parseFloat(e.target.value).toFixed(2);
           if (isAnalyzed) calculateMetrics();
         });
       };
-      updateSliderVal(confSlider, confVal);
-      updateSliderVal(iouSlider, iouVal);
-      updateSliderVal(nmsSlider, nmsVal);
+      updateSlider(confSlider, confVal);
+      updateSlider(iouSlider, iouVal);
+      updateSlider(nmsSlider, nmsVal);
 
-      // Canvas Interaction
+      // --- Image Handling (NEW) ---
+      function handleImageUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const img = new Image();
+          img.onload = function () {
+            bgImage = img;
+            calculateImageFit();
+            document.getElementById("empty-state-text").style.display = "none";
+            drawAll();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function removeImage() {
+        bgImage = null;
+        document.getElementById("img-upload").value = ""; // Reset input
+        document.getElementById("empty-state-text").style.display = "flex";
+        drawAll();
+      }
+
+      function calculateImageFit() {
+        if (!bgImage) return;
+        // Scale "contain" logic
+        const scale = Math.min(
+          CANVAS_SIZE / bgImage.width,
+          CANVAS_SIZE / bgImage.height
+        );
+        const w = bgImage.width * scale;
+        const h = bgImage.height * scale;
+        const x = (CANVAS_SIZE - w) / 2;
+        const y = (CANVAS_SIZE - h) / 2;
+        bgImageProps = { x, y, w, h };
+      }
+
+      // --- Canvas Interaction ---
       canvas.addEventListener("mousedown", (e) => {
-        if (e.button === 2) return; // Right click handled by contextmenu
+        if (e.button === 2) return;
         const rect = canvas.getBoundingClientRect();
         startX = e.clientX - rect.left;
         startY = e.clientY - rect.top;
@@ -485,13 +548,11 @@
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Hover logic
         if (!isDrawing) {
           handleHover(x, y);
           return;
         }
 
-        // Drawing logic
         currentRect = {
           x: Math.min(startX, x),
           y: Math.min(startY, y),
@@ -500,7 +561,6 @@
         };
         drawAll();
 
-        // Draw guideline
         ctx.beginPath();
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
@@ -509,13 +569,20 @@
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Draw dimensions tooltip while drawing
-        ctx.fillStyle = "black";
+        // Dimensions helper
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 2;
         ctx.font = "10px monospace";
+        ctx.strokeText(
+          `${Math.round(currentRect.w)}x${Math.round(currentRect.h)}`,
+          currentRect.x,
+          currentRect.y - 8
+        );
         ctx.fillText(
           `${Math.round(currentRect.w)}x${Math.round(currentRect.h)}`,
           currentRect.x,
-          currentRect.y - 5
+          currentRect.y - 8
         );
       });
 
@@ -533,7 +600,6 @@
             box.score = parseFloat(confSlider.value);
             predictions.push(box);
           }
-          // Reset analysis if user modifies data
           isAnalyzed = false;
           document.getElementById("results-panel").classList.add("hidden");
         }
@@ -542,29 +608,26 @@
         drawAll();
       });
 
-      // Right click to delete
       canvas.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        // Delete logic (reverse order to delete top-most)
         let deleted = false;
-        // Check Preds first
+        // Delete Preds first
         for (let i = predictions.length - 1; i >= 0; i--) {
           const b = predictions[i];
-          if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+          if (isPointInside(x, y, b)) {
             predictions.splice(i, 1);
             deleted = true;
             break;
           }
         }
-        // Check GTs if no pred deleted
         if (!deleted) {
           for (let i = groundTruths.length - 1; i >= 0; i--) {
             const b = groundTruths[i];
-            if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+            if (isPointInside(x, y, b)) {
               groundTruths.splice(i, 1);
               deleted = true;
               break;
@@ -578,29 +641,95 @@
         }
       });
 
+      function isPointInside(x, y, b) {
+        return x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+      }
+
       function setMode(mode) {
         currentMode = mode;
         const activeClass = "ring-2 ring-offset-1 shadow-sm";
-        const confCtrl = document.getElementById("conf-control");
-
         if (mode === "gt") {
           btnGt.className = `flex-1 py-2 px-2 rounded bg-green-600 text-white text-sm font-bold transition ${activeClass} ring-green-600`;
           btnPred.className =
             "flex-1 py-2 px-2 rounded bg-gray-100 text-gray-600 text-sm font-bold hover:bg-red-50 transition";
-          confCtrl.classList.add("hidden");
+          document.getElementById("conf-control").classList.add("hidden");
         } else {
           btnGt.className =
             "flex-1 py-2 px-2 rounded bg-gray-100 text-gray-600 text-sm font-bold hover:bg-green-50 transition";
           btnPred.className = `flex-1 py-2 px-2 rounded bg-indigo-600 text-white text-sm font-bold transition ${activeClass} ring-indigo-600`;
-          confCtrl.classList.remove("hidden");
+          document.getElementById("conf-control").classList.remove("hidden");
         }
       }
 
-      function clearCanvas() {
+      function clearBoxesOnly() {
         groundTruths = [];
         predictions = [];
         isAnalyzed = false;
         document.getElementById("results-panel").classList.add("hidden");
+        drawAll();
+      }
+
+      function randomizeSimulation() {
+        clearBoxesOnly();
+        document.getElementById("empty-state-text").style.display = "none";
+
+        // 1. Create 2-4 Ground Truths
+        const numGT = Math.floor(Math.random() * 3) + 2;
+        for (let i = 0; i < numGT; i++) {
+          const w = 60 + Math.random() * 100;
+          const h = 60 + Math.random() * 100;
+          const x = 50 + Math.random() * (CANVAS_SIZE - w - 100);
+          const y = 50 + Math.random() * (CANVAS_SIZE - h - 100);
+
+          const gt = { x, y, w, h, id: Date.now() + i };
+          groundTruths.push(gt);
+
+          // 2. Chance to create a Good Prediction for this GT (True Positive Simulation)
+          // 80% chance to detect
+          if (Math.random() > 0.2) {
+            // Add noise to coords
+            const noiseX = (Math.random() - 0.5) * 20;
+            const noiseY = (Math.random() - 0.5) * 20;
+            const noiseW = (Math.random() - 0.5) * 20;
+            const noiseH = (Math.random() - 0.5) * 20;
+
+            const score = 0.75 + Math.random() * 0.24; // High score 0.75 - 0.99
+
+            predictions.push({
+              x: x + noiseX,
+              y: y + noiseY,
+              w: Math.max(10, w + noiseW),
+              h: Math.max(10, h + noiseH),
+              score: score,
+              id: Date.now() + i + 1000,
+            });
+
+            // NMS Simulation: Add a duplicate box nearby with lower score
+            if (Math.random() > 0.5) {
+              predictions.push({
+                x: x + noiseX + 10,
+                y: y + noiseY + 10,
+                w: Math.max(10, w + noiseW),
+                h: Math.max(10, h + noiseH),
+                score: score - 0.1 - Math.random() * 0.2, // Lower score
+                id: Date.now() + i + 2000,
+              });
+            }
+          }
+        }
+
+        // 3. Create Random False Positives (Noise)
+        const numFP = Math.floor(Math.random() * 3); // 0-2 random noise boxes
+        for (let i = 0; i < numFP; i++) {
+          const w = 50 + Math.random() * 80;
+          const h = 50 + Math.random() * 80;
+          const x = Math.random() * (CANVAS_SIZE - w);
+          const y = Math.random() * (CANVAS_SIZE - h);
+          const score = 0.3 + Math.random() * 0.5; // Random score 0.3 - 0.8
+
+          predictions.push({ x, y, w, h, score, id: Date.now() + i + 3000 });
+        }
+
         drawAll();
       }
 
@@ -610,94 +739,71 @@
         if (isAnalyzed) calculateMetrics();
       }
 
-      // --- Math Helpers ---
-      function getIntersection(boxA, boxB) {
-        const xA = Math.max(boxA.x, boxB.x);
-        const yA = Math.max(boxA.y, boxB.y);
-        const xB = Math.min(boxA.x + boxA.w, boxB.x + boxB.w);
-        const yB = Math.min(boxA.y + boxA.h, boxB.y + boxB.h);
-        const w = Math.max(0, xB - xA);
-        const h = Math.max(0, yB - yA);
-        if (w === 0 || h === 0) return null;
-        return { x: xA, y: yA, w: w, h: h, area: w * h };
-      }
-
-      function calculateIoU(boxA, boxB) {
-        const inter = getIntersection(boxA, boxB);
-        if (!inter) return 0;
-        const union = boxA.w * boxA.h + boxB.w * boxB.h - inter.area;
-        return union === 0 ? 0 : inter.area / union;
-      }
-
-      // --- Rendering ---
+      // --- Drawing Logic ---
       function drawAll() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 1. Grid (TN)
+        // 1. Draw Background Image
+        if (bgImage) {
+          ctx.drawImage(
+            bgImage,
+            bgImageProps.x,
+            bgImageProps.y,
+            bgImageProps.w,
+            bgImageProps.h
+          );
+        }
+
+        // 2. Grid (TN) - Draw faint if image exists
         if (showGridCheck.checked) {
           drawGrid();
         }
 
-        // 2. Ground Truths
+        // 3. Ground Truths
         groundTruths.forEach((gt) => {
           let color = "#16a34a";
           let dash = [];
           let label = "GT";
 
           if (isAnalyzed && gt.status === "FN") {
-            color = "#fb923c"; // Orange
+            color = "#fb923c";
             dash = [5, 5];
-            label = "Missed (FN)";
+            label = "Missed";
           }
 
-          ctx.beginPath();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = color;
-          ctx.setLineDash(dash);
-          ctx.rect(gt.x, gt.y, gt.w, gt.h);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Label
-          ctx.fillStyle = color;
-          ctx.font = "bold 11px sans-serif";
-          const textW = ctx.measureText(label).width;
-          ctx.fillRect(gt.x, gt.y - 16, textW + 6, 16);
-          ctx.fillStyle = "white";
-          ctx.fillText(label, gt.x + 3, gt.y - 4);
+          drawBox(gt, color, label, 2, dash);
         });
 
-        // 3. Predictions
-        // Draw suppressed boxes first (so they are behind)
+        // 4. Predictions (Suppressed first)
         predictions.forEach((pred) => {
           if (isAnalyzed && pred.status === "SUPPRESSED") {
-            drawBox(pred, "#9ca3af", "Suppressed", 1, true);
+            drawBox(pred, "#9ca3af", "Suppressed", 1, [2, 2]);
           }
         });
 
-        // Draw Active Predictions
+        // 5. Active Predictions
         predictions.forEach((pred) => {
           if (isAnalyzed && pred.status === "SUPPRESSED") return;
 
           let color = "#4f46e5";
-          let label = `Conf: ${pred.score.toFixed(2)}`;
-          let lineWidth = 2;
+          let label = `${pred.score.toFixed(2)}`;
+          let lw = 2;
 
           if (isAnalyzed) {
             if (pred.status === "TP") {
               color = "#22c55e"; // Green
-              label = `TP (${pred.iou.toFixed(2)})`;
-              lineWidth = 3;
+              label = `TP ${pred.iou.toFixed(2)}`;
+              lw = 3;
             } else {
               color = "#ef4444"; // Red
-              label = `FP (${pred.iou ? pred.iou.toFixed(2) : "0.00"})`;
-              lineWidth = 2;
+              label = `FP ${pred.iou ? pred.iou.toFixed(2) : "0.00"}`;
+              lw = 2;
             }
           }
-          drawBox(pred, color, label, lineWidth);
+          drawBox(pred, color, label, lw, []);
         });
 
-        // 4. Draw Intersections (Visualizing IoU)
+        // 6. Intersection Area
         if (isAnalyzed && showInterCheck.checked) {
           predictions.forEach((pred) => {
             if (pred.status === "TP" && pred.bestGtId) {
@@ -705,7 +811,7 @@
               if (gt) {
                 const inter = getIntersection(pred, gt);
                 if (inter) {
-                  ctx.fillStyle = "rgba(168, 85, 247, 0.4)"; // Purple transparent
+                  ctx.fillStyle = "rgba(168, 85, 247, 0.4)";
                   ctx.fillRect(inter.x, inter.y, inter.w, inter.h);
                   ctx.strokeStyle = "#a855f7";
                   ctx.lineWidth = 1;
@@ -717,39 +823,44 @@
         }
       }
 
-      function drawBox(box, color, text, lw, dashed = false) {
+      function drawBox(box, color, text, lw, dash) {
         ctx.beginPath();
         ctx.lineWidth = lw;
         ctx.strokeStyle = color;
-        if (dashed) ctx.setLineDash([4, 4]);
+        ctx.setLineDash(dash || []);
         ctx.rect(box.x, box.y, box.w, box.h);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Fill slightly
-        ctx.fillStyle = color + "20"; // Hex opacity
+        // Fill slightly (less opaque if image present)
+        ctx.fillStyle = color + (bgImage ? "15" : "20");
         ctx.fill();
 
-        // Label
+        // Text Label Background
         ctx.fillStyle = color;
-        ctx.font = "10px sans-serif";
+        ctx.font = "bold 10px sans-serif";
         const w = ctx.measureText(text).width;
-        ctx.fillRect(box.x, box.y - 14, w + 4, 14);
+        ctx.fillRect(box.x, box.y - 14, w + 6, 14);
+        // Text
         ctx.fillStyle = "white";
-        ctx.fillText(text, box.x + 2, box.y - 3);
+        ctx.fillText(text, box.x + 3, box.y - 3);
       }
 
       function drawGrid() {
-        ctx.strokeStyle = "#e2e8f0";
+        ctx.strokeStyle = bgImage ? "rgba(255, 255, 255, 0.3)" : "#e2e8f0";
         ctx.lineWidth = 1;
         let tn = 0;
         const cols = CANVAS_SIZE / GRID_SIZE;
+
+        const activePreds = isAnalyzed
+          ? predictions.filter((p) => p.status !== "SUPPRESSED")
+          : predictions;
+
         for (let i = 0; i < cols; i++) {
           for (let j = 0; j < cols; j++) {
             const cx = i * GRID_SIZE;
             const cy = j * GRID_SIZE;
 
-            // Simple logic: if grid cell touches NO box, it's TN
             let touch = false;
             const check = (b) =>
               !(
@@ -759,25 +870,11 @@
                 cy + GRID_SIZE < b.y
               );
 
-            // Only check active preds and GTs
-            const activePreds = isAnalyzed
-              ? predictions.filter((p) => p.status !== "SUPPRESSED")
-              : predictions;
-
-            if (groundTruths.some(check) || activePreds.some(check)) {
+            if (groundTruths.some(check) || activePreds.some(check))
               touch = true;
-            }
 
             if (!touch) {
               ctx.strokeRect(cx, cy, GRID_SIZE, GRID_SIZE);
-              ctx.fillStyle = "#f8fafc";
-              ctx.fillRect(cx + 1, cy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
-              if (Math.random() > 0.9) {
-                // Randomly draw TN label to reduce clutter
-                ctx.fillStyle = "#cbd5e1";
-                ctx.font = "9px sans-serif";
-                ctx.fillText("TN", cx + 18, cy + 30);
-              }
               tn++;
             }
           }
@@ -786,18 +883,17 @@
       }
 
       function handleHover(x, y) {
-        // Find top box
         let found = null;
-        // Check preds
+        // Check Preds
         for (let b of predictions) {
-          if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+          if (isPointInside(x, y, b)) {
             found = { b, type: "Pred" };
             break;
-          } // top is last usually, but visually whatever
+          }
         }
         if (!found) {
           for (let b of groundTruths) {
-            if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+            if (isPointInside(x, y, b)) {
               found = { b, type: "GT" };
               break;
             }
@@ -807,17 +903,17 @@
         if (found) {
           canvas.style.cursor = "pointer";
           tooltip.style.display = "block";
-          tooltip.style.left = x + 15 + "px";
-          tooltip.style.top = y + 15 + "px";
-          let txt = `Type: ${found.type}`;
+          tooltip.style.left = x + 20 + "px";
+          tooltip.style.top = y + 20 + "px";
+          let txt = `[${found.type}]`;
           if (found.type === "Pred") {
-            txt += `\nConf: ${found.b.score.toFixed(2)}`;
+            txt += `\nConf: ${found.b.score}`;
             if (isAnalyzed)
               txt += `\nStatus: ${found.b.status}\nIoU: ${
                 found.b.iou?.toFixed(2) || 0
               }`;
           } else if (isAnalyzed) {
-            txt += `\nStatus: ${found.b.status}`;
+            txt += `\nResult: ${found.b.status}`;
           }
           tooltip.textContent = txt;
         } else {
@@ -826,7 +922,25 @@
         }
       }
 
-      // --- CORE ALGORITHM ---
+      // --- ALGORITHMS (Same as V3 but refined) ---
+      function getIntersection(boxA, boxB) {
+        const xA = Math.max(boxA.x, boxB.x);
+        const yA = Math.max(boxA.y, boxB.y);
+        const xB = Math.min(boxA.x + boxA.w, boxB.x + boxB.w);
+        const yB = Math.min(boxA.y + boxA.h, boxB.y + boxB.h);
+        const w = Math.max(0, xB - xA);
+        const h = Math.max(0, yB - yA);
+        if (w === 0 || h === 0) return null;
+        return { x: xA, y: yA, w, h, area: w * h };
+      }
+
+      function calculateIoU(boxA, boxB) {
+        const inter = getIntersection(boxA, boxB);
+        if (!inter) return 0;
+        const union = boxA.w * boxA.h + boxB.w * boxB.h - inter.area;
+        return union === 0 ? 0 : inter.area / union;
+      }
+
       function calculateMetrics() {
         if (groundTruths.length === 0 && predictions.length === 0) return;
 
@@ -837,7 +951,7 @@
         const nmsThresh = parseFloat(nmsSlider.value);
         const doNms = useNmsCheck.checked;
 
-        // 1. Reset States
+        // Reset
         groundTruths.forEach((gt) => (gt.status = "FN"));
         predictions.forEach((p) => {
           p.status = "UNKNOWN";
@@ -845,44 +959,34 @@
           p.bestGtId = null;
         });
 
-        // 2. NMS (Non-Maximum Suppression)
-        // Sort by confidence high -> low
+        // NMS
         let sortedPreds = [...predictions].sort((a, b) => b.score - a.score);
-
         if (doNms) {
           const active = [];
           while (sortedPreds.length > 0) {
             const current = sortedPreds.shift();
             active.push(current);
-
-            // Filter remaining: if IoU with current > NMS thresh, suppress it
             const keep = [];
-            const suppress = [];
             sortedPreds.forEach((other) => {
               const iou = calculateIoU(current, other);
               if (iou > nmsThresh) {
                 other.status = "SUPPRESSED";
-                other.iou = iou; // Log why it was suppressed
-                suppress.push(other);
+                other.iou = iou;
               } else {
                 keep.push(other);
               }
             });
             sortedPreds = keep;
           }
-          // predictions array already holds references, so status updates persist
-          sortedPreds = active; // For matching step, only use active ones
         }
 
-        // 3. Matching (Greedy IoU)
-        // Only consider non-suppressed preds
+        // Matching
         const activePreds = predictions
           .filter((p) => p.status !== "SUPPRESSED")
           .sort((a, b) => b.score - a.score);
-
         let tp = 0,
-          fp = 0;
-        let accTP = 0,
+          fp = 0,
+          accTP = 0,
           accFP = 0;
         const totalGT = groundTruths.length;
         const prPoints = [];
@@ -909,7 +1013,7 @@
               tp++;
               accTP++;
             } else {
-              pred.status = "FP"; // Duplicate detection
+              pred.status = "FP";
               fp++;
               accFP++;
             }
@@ -919,24 +1023,20 @@
             accFP++;
           }
 
-          // PR Calculation point
           const precision = accTP / (accTP + accFP);
           const recall = totalGT === 0 ? 0 : accTP / totalGT;
           prPoints.push({ x: recall, y: precision });
         });
 
-        // FP also includes suppressed ones technically? No, NMS removes them before metrics in standard eval usually,
-        // or they are counted as FP if not suppressed? Standard: NMS is pre-processing. Suppressed boxes don't count for metrics.
-
+        // Count
         const fn = groundTruths.filter((g) => g.status === "FN").length;
-
-        // 4. Update UI
         document.getElementById("tp-count").textContent = tp;
         document.getElementById("fp-count").textContent = fp;
         document.getElementById("fn-count").textContent = fn;
         if (!showGridCheck.checked)
           document.getElementById("tn-count").textContent = "N/A";
 
+        // Calc Metrics
         const pFinal = tp + fp === 0 ? 0 : tp / (tp + fp);
         const rFinal = totalGT === 0 ? 0 : tp / totalGT;
         const f1 =
@@ -949,15 +1049,13 @@
         document.getElementById("recall-val").textContent = rFinal.toFixed(4);
         document.getElementById("f1-val").textContent = f1.toFixed(4);
 
-        // AP Calculation
+        // AP
         let ap = 0;
         if (prPoints.length > 0) {
           let recs = [0, ...prPoints.map((p) => p.x)];
           let precs = [prPoints[0].y, ...prPoints.map((p) => p.y)];
-          // Smooth
           for (let i = precs.length - 2; i >= 0; i--)
             precs[i] = Math.max(precs[i], precs[i + 1]);
-          // Integrate
           for (let i = 1; i < recs.length; i++)
             ap += (recs[i] - recs[i - 1]) * precs[i];
         }
@@ -965,81 +1063,56 @@
 
         drawAll();
         drawChart(prPoints);
-        updateLogTable();
-        generateReport(pFinal, rFinal, ap, doNms, nmsThresh);
+        updateLogs();
+        genReport(pFinal, rFinal, ap, doNms, nmsThresh);
       }
 
-      function updateLogTable() {
-        const tbody = document.getElementById("log-table-body");
-        tbody.innerHTML = "";
-        // Sort: TP -> FP -> Suppressed
-        const sorted = [...predictions].sort((a, b) => {
-          const order = { TP: 1, FP: 2, SUPPRESSED: 3, UNKNOWN: 4 };
-          return order[a.status] - order[b.status] || b.score - a.score;
-        });
-
-        sorted.forEach((p, idx) => {
+      function updateLogs() {
+        const body = document.getElementById("log-table-body");
+        body.innerHTML = "";
+        const sorted = [...predictions].sort((a, b) => b.score - a.score);
+        sorted.forEach((p) => {
           const tr = document.createElement("tr");
-          let statusClass = "text-gray-600";
-          if (p.status === "TP") statusClass = "text-green-600 font-bold";
-          if (p.status === "FP") statusClass = "text-red-600 font-bold";
+          let clr = "text-gray-600";
+          if (p.status === "TP") clr = "text-green-600 font-bold";
+          if (p.status === "FP") clr = "text-red-600 font-bold";
           if (p.status === "SUPPRESSED")
-            statusClass = "text-gray-400 italic decoration-line-through";
+            clr = "text-gray-400 italic line-through";
 
-          tr.innerHTML = `
-                    <td class="px-2 py-1 border-b">${idx + 1}</td>
-                    <td class="px-2 py-1 border-b font-mono">${p.score.toFixed(
-                      2
-                    )}</td>
-                    <td class="px-2 py-1 border-b font-mono">${p.iou.toFixed(
-                      2
-                    )}</td>
-                    <td class="px-2 py-1 border-b ${statusClass}">${
+          tr.innerHTML = `<td class="px-2 py-1 border-b font-mono">${p.score.toFixed(
+            2
+          )}</td>
+                                <td class="px-2 py-1 border-b font-mono">${p.iou.toFixed(
+                                  2
+                                )}</td>
+                                <td class="px-2 py-1 border-b ${clr}">${
             p.status
-          }</td>
-                `;
-          tbody.appendChild(tr);
+          }</td>`;
+          body.appendChild(tr);
         });
       }
 
-      function generateReport(p, r, ap, nmsActive, nmsThresh) {
+      function genReport(p, r, ap, nms, nmsTh) {
         const el = document.getElementById("scientific-conclusion");
-        let text = `<b>Kết luận:</b> Với AP=${ap.toFixed(
+        let txt = `<b>Kết luận:</b> Với mAP=${ap.toFixed(
           2
-        )}, hệ thống có hiệu năng ${
-          ap > 0.8 ? "xuất sắc" : ap > 0.5 ? "trung bình" : "thấp"
-        }. `;
-
-        if (nmsActive) {
-          text += `Việc áp dụng <b>NMS</b> (Ngưỡng ${nmsThresh}) đã giúp loại bỏ các dự đoán trùng lặp. `;
-          const suppressedCount = predictions.filter(
-            (x) => x.status === "SUPPRESSED"
-          ).length;
-          if (suppressedCount > 0)
-            text += `Cụ thể, có ${suppressedCount} box bị triệt tiêu để giảm FP. `;
-        } else {
-          text += `<b>Cảnh báo:</b> NMS đang tắt. Precision có thể bị giảm do nhiều box dư thừa bao quanh một đối tượng. `;
-        }
-
+        )}, hệ thống hoạt động ${ap > 0.75 ? "tốt" : "trung bình"}. `;
+        if (nms)
+          txt += `Thuật toán NMS (ngưỡng ${nmsTh}) đã hoạt động để lọc trùng lặp. `;
+        else txt += `Việc tắt NMS có thể khiến số lượng FP tăng cao. `;
         if (p > r)
-          text += `Mô hình thiên về độ chính xác (Precision=${p.toFixed(
-            2
-          )} > Recall=${r.toFixed(2)}). `;
+          txt += `Mô hình có độ chính xác cao nhưng bỏ sót đối tượng (Precision > Recall).`;
         else if (r > p)
-          text += `Mô hình thiên về độ phủ (Recall=${r.toFixed(
-            2
-          )} > Precision=${p.toFixed(2)}). `;
-
-        el.innerHTML = text;
+          txt += `Mô hình bắt được nhiều đối tượng nhưng hay báo động giả (Recall > Precision).`;
+        el.innerHTML = txt;
       }
 
       function drawChart(data) {
-        const ctxChart = document.getElementById("prChart").getContext("2d");
+        const ctx = document.getElementById("prChart").getContext("2d");
         if (prChartInstance) prChartInstance.destroy();
         const pts = data.map((p) => ({ x: p.x, y: p.y }));
         if (pts.length === 0) pts.push({ x: 0, y: 0 });
-
-        prChartInstance = new Chart(ctxChart, {
+        prChartInstance = new Chart(ctx, {
           type: "line",
           data: {
             datasets: [
@@ -1049,8 +1122,7 @@
                 borderColor: "#4f46e5",
                 backgroundColor: "rgba(79, 70, 229, 0.1)",
                 fill: true,
-                tension: 0.1,
-                pointRadius: 3,
+                tension: 0,
               },
             ],
           },
@@ -1061,12 +1133,12 @@
               x: {
                 type: "linear",
                 min: 0,
-                max: 1.05,
+                max: 1.1,
                 title: { display: true, text: "Recall" },
               },
               y: {
                 min: 0,
-                max: 1.05,
+                max: 1.1,
                 title: { display: true, text: "Precision" },
               },
             },
@@ -1076,18 +1148,14 @@
       }
 
       function downloadReport() {
-        // Simple screenshot of the body (user can crop) or specific div
-        // Using html2canvas
-        const element = document.body;
-        html2canvas(element).then((canvas) => {
-          const link = document.createElement("a");
-          link.download = "object_detection_report.png";
-          link.href = canvas.toDataURL();
-          link.click();
+        html2canvas(document.body).then((c) => {
+          const a = document.createElement("a");
+          a.download = "OD_Report.png";
+          a.href = c.toDataURL();
+          a.click();
         });
       }
 
-      // Init
       drawAll();
     </script>
   </body>
